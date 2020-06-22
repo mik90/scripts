@@ -1,13 +1,9 @@
 #!/usr/bin/python3
 
-# TODO Make script that:
-# Compiles kernel with "make $(nproc)"
-# installs modules with "make modules_install"
-# installs Kernel image with "INSTALL_PATH=/boot/EFI/Gentoo make install"
-#   But this should also append the ".efi" to the end of the image name
-
 import os
-import subprocess, subprocess.CalledProcessError
+import subprocess
+from subprocess import CalledProcessError
+import pathlib
 from pathlib import Path
 
 def error_and_exit(error):
@@ -57,21 +53,26 @@ def rename_kernel():
     Path(v).rename(new_name)
 
 def clean_up():
+  # Maybe preserve lts kernels as well?
+
   efi_gentoo_dir = "/boot/EFI/Gentoo"
   os.chdir(efi_gentoo_dir)
   script_info("Cleaning up old kernels")
 
   # Find all vmlinuz, config, and system map files
-  vmlinuzes = pathlib.Path.glob("/boot/EFI/Gentoo/vmlinuz*.efi")
-  system_maps = pathlib.Path.glob("/boot/EFI/Gentoo/System.map*")
-  configs = pathlib.Path.glob("/boot/EFI/Gentoo/config*")
+  vmlinuzes = Path().glob("/boot/EFI/Gentoo/vmlinuz*.efi")
+  system_maps = Path().glob("/boot/EFI/Gentoo/System.map*")
+  configs = Path().glob("/boot/EFI/Gentoo/config*")
 
-
-  # TODO Ensure that the 3 lists are the same length
+  # Ensure that the 3 lists are the same length
+  if not len(list(vmlinuzes))  == len(list(system_maps)) == len(list(configs)):
+    error_and_exit(f"There are {len(list(vmlinuzes))} vmlinuz files, {len(list(system_maps))} "
+                    + f"system maps, and {len(list(configs))} config files")
 
   # TODO Get a list of all the versions and .olds
   #   - Counting a .old as a separate version
   #   - Should probably store these in a map of some sort
+  #     - X.Y.Z[.old] so preserve the .old aspect
 
   # TODO Sort them by age
 
