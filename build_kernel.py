@@ -43,15 +43,6 @@ def install():
     error_and_exit(err)
 
 
-def rename_kernel():
-  # vmlinuz.*gentoo as vmlinuz.*gentoo.efi
-  vmlinuzes = Path.glob("/boot/EFI/Gentoo/vmlinuz-*-gentoo")
-  for v in vmlinuzes:
-    old_name = v.name
-    new_name = f"{v.name}.efi"
-    script_info(f"Renaming {old_name} to {new_name}")
-    Path(v).rename(new_name)
-
 def clean_up():
   # Maybe preserve lts kernels as well?
 
@@ -60,7 +51,7 @@ def clean_up():
   script_info("Cleaning up old kernels")
 
   # Find all vmlinuz, config, and system map files
-  vmlinuzes = Path().glob("/boot/EFI/Gentoo/vmlinuz*.efi")
+  vmlinuzes = Path().glob("/boot/EFI/Gentoo/vmlinuz-*-gentoo")
   system_maps = Path().glob("/boot/EFI/Gentoo/System.map*")
   configs = Path().glob("/boot/EFI/Gentoo/config*")
 
@@ -85,7 +76,7 @@ def main():
   check_perm()
   compile_kernel()
   install()
-  clean_up()
+  #clean_up()
 
 if __name__ == 'main':
   main()
