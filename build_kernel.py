@@ -57,6 +57,8 @@ def install():
     install_path = "/boot/EFI/Gentoo"
     script_info(f"Installing kernel image, system map, and config to {install_path}")
     try:
+        # This copies over the system environment but appends the INSTALL_PATH variable
+        # needed during "make install"
         subprocess.run(["/bin/bash", "-c", "\"make\" install"],
                        env=dict(os.environ, INSTALL_PATH="/boot/EFI/Gentoo"), check=True)
     except CalledProcessError as err:
@@ -107,9 +109,12 @@ def extract_version_info(vmlinuzes, system_maps, configs):
         system_maps = Path().glob("System.map*")
         configs = Path().glob("config*")
         if is_old:
+            # Iterate through all of the system_maps and configs and check each stringified filename
+            # to see if it has our version_triple and if the filename ends with .old
+            # Note: .pop() is a lazy way to convert a single-element list to the underlying type
             # Ensure that the suffix is .old
             system_map = [s for s in system_maps if version_triple in str(s) and str(s).endswith(".old")].pop()
-            config = [s for s in configs if version_triple in str(s) and str(s).endswith(".old")].pop() # lazy way to convert list to underlying element6
+            config = [s for s in configs if version_triple in str(s) and str(s).endswith(".old")].pop()
         else:
             # Ensure that the suffix isn't .old
             system_map = [s for s in system_maps if version_triple in str(s) and not str(s).endswith(".old")].pop()
@@ -123,9 +128,9 @@ def version_cmp(version_info: VersionInfo):
     # Indices:
     # 0 1 2 3 4
     # X . Y . Z
-    major = version_info.version_triple[0]
-    minor = version_info.version_triple[2]
-    patch = version_info.version_triple[4]
+    major = version_info.version_triple[0] # X
+    minor = version_info.version_triple[2] # Y
+    patch = version_info.version_triple[4] # Z
     if version_info.is_old:
         # is .old, penalize it in the sorting by making this 0
         old_adj = 0
@@ -137,7 +142,6 @@ def version_cmp(version_info: VersionInfo):
 
 def clean_up():
     """ delete old kernels """
-    # Maybe preserve lts kernels as well?
 
     efi_gentoo_dir = "/boot/EFI/Gentoo"
     os.chdir(efi_gentoo_dir)
@@ -153,7 +157,7 @@ def clean_up():
         error_and_exit(f"There are {len(list(vmlinuzes))} vmlinuz files, {len(list(system_maps))} "
                        + f"system maps, and {len(list(configs))} config files")
 
-    # Re-gen the generators
+    # Re-gen the generators, probably could've just copied this as a list
     vmlinuzes = Path().glob("vmlinuz-*-gentoo*")
     system_maps = Path().glob("System.map*")
     configs = Path().glob("config*")
