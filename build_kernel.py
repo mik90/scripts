@@ -7,15 +7,16 @@ import subprocess
 from subprocess import CalledProcessError
 from collections import namedtuple
 from pathlib import Path
+from colorama import init, Fore, Style
 
 def error_and_exit(error):
     """ print error then exit with return code 1 """
-    print(f"build_kernel.py: Error! {error}, exiting...")
+    print(Fore.RED + f"build_kernel.py: " + Style.RESET_ALL + f"Error! {error}, exiting...")
     sys.exit(1)
 
 def script_info(info):
     """ print debugging info """
-    print(f"build_kernel.py: {info}")
+    print(Fore.GREEN + f"build_kernel.py: " + Style.RESET_ALL + f"{info}")
 
 def check_perm():
     """ ensure that the user is seen as root """
@@ -193,6 +194,7 @@ def clean_up():
 
 def main():
     """ main """
+    init() # Init colorama, not necessarily needed for Linux but why not
     script_info("-----------------------")
     check_perm()
     sync_config()
