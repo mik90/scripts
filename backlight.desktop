@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Exec=xbacklight -set 45
+Hidden=false
+X-GNOME-Autostart-enabled=true
+Name=Default backlight
+Comment=Sets default backlight to 45%
