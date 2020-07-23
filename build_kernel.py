@@ -125,19 +125,22 @@ def extract_version_info(vmlinuzes, system_maps, configs):
 
 def version_cmp(version_info: VersionInfo):
     """ Sort based on version, and then based on .old if versions are equal """
+   
+    
     # Indices:
     # 0 1 2 3 4
     # X . Y . Z
-    major = version_info.version_triple[0] # X
-    minor = version_info.version_triple[2] # Y
-    patch = version_info.version_triple[4] # Z
+    version_triple_split = version_info.version_triple.split(sep=".")
+    major = version_triple_split[0] # X
+    minor = version_triple_split[1] # Y
+    patch = version_triple_split[2] # Z
     if version_info.is_old:
-        # is .old, penalize it in the sorting by making this 0
-        old_adj = 0
+        # is .old, penalize it in the sorting by making this -1
+        old_adj = -1
     else:
-        # is NOT .old, give it an advantage in sorting by making this 1
-        old_adj = 1
-    return (major, minor, patch, old_adj)
+        # is NOT .old, give it an advantage in sorting by making this 0
+        old_adj = 0
+    return (int(major), int(minor), int(patch), int(old_adj))
 
 
 def clean_up():
@@ -164,8 +167,8 @@ def clean_up():
 
     version_infos = extract_version_info(vmlinuzes, system_maps, configs)
 
-    # If there's 2 or less versions, exit 
-    if len(version_infos) <= 2:
+    # If there's 3 or less versions, exit 
+    if len(version_infos) <= 3:
         script_info(f"Only {len(version_infos)} kernels are there, not deleting any")
         return
 
