@@ -6,11 +6,10 @@ import sys
 import subprocess
 import shutil
 from subprocess import CalledProcessError
-from collections import namedtuple
 from pathlib import Path
 from colorama import init, Fore, Style
 
-""" How many kernel versions should be preserved """
+# How many kernel versions should be preserved
 MAX_VERSIONS_TO_KEEP = 2
 KERNEL_BUILD_DIR = Path("/usr/src/linux")
 INSTALL_PATH = Path("/boot/EFI/Gentoo")
@@ -83,8 +82,11 @@ class VersionInfo:
     def __le__(self, other):
         return self < other or self == other
 
-
 class KernelUpdater:
+    """
+    Contains all the logic for building and installing a new kernel.
+    Run using the update() method
+    """
     current_kernels: [VersionInfo] = []
 
     def __init__(self):
@@ -130,7 +132,7 @@ class KernelUpdater:
         """ install modules and kernel image itself """
         os.chdir(str(KERNEL_BUILD_DIR))
 
-        script_info(f"Installing modules")
+        script_info("Installing modules")
         try:
             subprocess.run(["make", "modules_install"], check=True)
         except CalledProcessError as err:
@@ -191,8 +193,9 @@ class KernelUpdater:
             system_maps = Path().glob("System.map*")
             configs = Path().glob("config*")
             if is_old:
-                # Iterate through all of the system_maps and configs and check each stringified filename
-                # to see if it has our version_triple and if the filename ends with .old
+                # Iterate through all of the system_maps and configs and check each
+                # stringified filename to see if it has our version_triple and if
+                # the filename ends with .old
                 # Note: .pop() is a lazy way to convert a single-element list to the underlying type
                 # Ensure that the suffix is .old
                 system_map = [s for s in system_maps if version_triple in str(
@@ -254,16 +257,16 @@ class KernelUpdater:
             kernel_to_delete.config.unlink()
 
             source_dir = Path(
-                f"{KERNEL_BUILD_DIR}/linux-{kernel_to_delete.version_triple}-gentoo")
+                f"/usr/src/linux-{kernel_to_delete.version_triple}-gentoo")
             script_info(f"Deleting source directory {str(source_dir)}")
             shutil.rmtree(source_dir)
 
     def update(self):
         """ Run all of the private methods in the proper order """
-        # self.__update_config()
-        # self.__compile_kernel()
-        # self.__install_new_kernel()
-        # self.__recompile_extra_modules()
+        self.__update_config()
+        self.__compile_kernel()
+        self.__install_new_kernel()
+        self.__recompile_extra_modules()
         self.__clean_up()
 
 
