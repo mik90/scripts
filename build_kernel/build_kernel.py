@@ -195,7 +195,6 @@ class KernelUpdater:
 
             is_old = bool(vmlinuz.suffix == '.old')
             # Find the accompying System.map and config
-            # Get a newer generator
             system_maps = Path().glob("System.map*")
             configs = Path().glob("config*")
             if is_old:
@@ -203,7 +202,8 @@ class KernelUpdater:
                 # stringified filename to see if it has our version_triple and if
                 # the filename ends with .old
                 # Note: .pop() is a lazy way to convert a single-element list to the underlying type
-                # Ensure that the suffix is .old
+                #
+                # Be extra sure that the suffix is .old
                 system_map = [s for s in system_maps if version_triple in str(
                     s) and str(s).endswith(".old")].pop()
                 config = [s for s in configs if version_triple in str(
@@ -272,6 +272,9 @@ class KernelUpdater:
         if self.manual_edit == False:
             # Update configuration automatically
             self.__update_config()
+        else:
+            # Do nothing, assume that the user updated the config
+            script_info("Using user-updated configuration")
         self.__compile_kernel()
         self.__install_new_kernel()
         self.__recompile_extra_modules()
