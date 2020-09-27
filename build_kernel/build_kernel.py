@@ -89,15 +89,13 @@ class KernelUpdater:
     Contains all the logic for building and installing a new kernel.
     Run using the update() method
     """
-    current_kernels: [VersionInfo] = []
-    manual_edit: bool
-    install_path: Path
 
     def __init__(self, manual_edit: bool, install_path: Path):
+        self.__manual_edit = manual_edit
+        self.__install_path = install_path
+        self.__current_kernels: [VersionInfo] = []
         self.__check_perm()
         self.__find_installed_kernels()
-        self.manual_edit = manual_edit
-        self.install_path = install_path
 
     def __check_perm(self):
         """ ensure that the user is seen as root """
@@ -112,7 +110,7 @@ class KernelUpdater:
 
         # Could get running config from /proc/config.gz but I'll just copy the newest one in /boot
         # The newest config we have
-        src = self.install_path / self.current_kernels[0].config
+        src = self.__install_path / self.__current_kernels[0].config
         dest = Path(os.getcwd() + "/.config")
 
         script_info(f"Copying {src.absolute()} to {dest.absolute()}")
@@ -145,12 +143,12 @@ class KernelUpdater:
             error_and_exit(err)
 
         script_info(
-            f"Installing kernel image, system map, and config to {str(self.install_path)}")
+            f"Installing kernel image, system map, and config to {str(self.__install_path)}")
         try:
             # This copies over the system environment but appends the INSTALL_PATH variable
             # needed during "make install"
             subprocess.run(["/bin/bash", "-c", "\"make\" install"],
-                           env=dict(os.environ, INSTALL_PATH=str(self.install_path)), check=True)
+                           env=dict(os.environ, INSTALL_PATH=str(self.__install_path)), check=True)
         except CalledProcessError as err:
             error_and_exit(err)
 
@@ -170,8 +168,8 @@ class KernelUpdater:
         vmlinuzes: a list or generator of strings like "vmlinuz-5.7.5-gentoo.old"
         """
         # Reset current list
-        self.current_kernels = []
-        os.chdir(str(self.install_path))
+        self.__current_kernels = []
+        os.chdir(str(self.__install_path))
         script_info(
             f"Searching for installed kernel files in {os.getcwd()}...")
 
@@ -215,10 +213,10 @@ class KernelUpdater:
                 config = [s for s in configs if version_triple in str(
                     s) and not str(s).endswith(".old")].pop()
 
-            self.current_kernels.append(VersionInfo(
+            self.__current_kernels.append(VersionInfo(
                 version_triple, vmlinuz, system_map, config, is_old))
 
-        self.current_kernels = sorted(self.current_kernels, reverse=True)
+        self.__current_kernels = sorted(self.__current_kernels, reverse=True)
 
     def __clean_up(self):
         """ delete old kernels """
@@ -226,24 +224,24 @@ class KernelUpdater:
         self.__find_installed_kernels()
 
         # If there's MAX_VERSIONS_TO_KEEP or less versions, exit
-        if len(self.current_kernels) <= MAX_VERSIONS_TO_KEEP:
+        if len(self.__current_kernels) <= MAX_VERSIONS_TO_KEEP:
             script_info(
-                f"Only {len(self.current_kernels)} kernels are there, not deleting any")
+                f"Only {len(self.__current_kernels)} kernels are there, not deleting any")
             return
 
         # Otherwise delete everything but the 2 newest versions
         # Sort them by age
         # The lowest values (newest) should be first, and highest (oldest) at the end
-        self.current_kernels = sorted(self.current_kernels, reverse=True)
+        self.__current_kernels = sorted(self.__current_kernels, reverse=True)
         script_info(f"sorted version_infos (newest to oldest):")
-        for v in self.current_kernels:
+        for v in self.__current_kernels:
             script_info(f"    {v}")
 
         # Also delete the accompying System map and configs
-        num_to_delete = len(self.current_kernels) - 2
+        num_to_delete = len(self.__current_kernels) - 2
         script_info(f"Deleting {num_to_delete} old kernel versions...")
         for _ in range(num_to_delete):
-            kernel_to_delete = self.current_kernels.pop()
+            kernel_to_delete = self.__current_kernels.pop()
             if kernel_to_delete.is_old:
                 script_info(
                     f"Deleting version {kernel_to_delete.version_triple}.old")
@@ -269,7 +267,7 @@ class KernelUpdater:
 
     def update(self):
         """ Run all of the private methods in the proper order """
-        if self.manual_edit == False:
+        if self.__manual_edit == False:
             # Update configuration automatically
             self.__update_config()
         else:
@@ -299,15 +297,13 @@ def main():
     init()  # Init colorama, not necessarily needed for Linux but why not
     script_info("-----------------------")
 
-    if args.manual == False:
+    if args.manual_edit == False:
         script_info(
             "Manual editing disabled. Kernel config will be automatically updated.")
     else:
         script_info(
             "Manual editing enabled. Assuming user updated the configuration manually.")
 
-    # Give user a second to cancel script in case the editing configuration was unexpected
-    time.sleep(1.0)
     updater = KernelUpdater(manual_edit=args.manual_edit,
                             install_path=args.install_path)
     updater.update()
