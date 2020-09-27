@@ -5,14 +5,15 @@ import os
 import sys
 import subprocess
 import shutil
+import argparse
+import time
 from subprocess import CalledProcessError
 from pathlib import Path
 from colorama import init, Fore, Style
 
 # How many kernel versions should be preserved
-MAX_VERSIONS_TO_KEEP = 2
+MAX_VERSIONS_TO_KEEP = 3
 KERNEL_BUILD_DIR = Path("/usr/src/linux")
-INSTALL_PATH = Path("/boot/EFI/Gentoo")
 
 
 def error_and_exit(error):
@@ -82,16 +83,21 @@ class VersionInfo:
     def __le__(self, other):
         return self < other or self == other
 
+
 class KernelUpdater:
     """
     Contains all the logic for building and installing a new kernel.
     Run using the update() method
     """
     current_kernels: [VersionInfo] = []
+    manual_edit: bool
+    install_path: Path
 
-    def __init__(self):
+    def __init__(self, manual_edit: bool, install_path: Path):
         self.__check_perm()
         self.__find_installed_kernels()
+        self.manual_edit = manual_edit
+        self.install_path = install_path
 
     def __check_perm(self):
         """ ensure that the user is seen as root """
@@ -106,7 +112,7 @@ class KernelUpdater:
 
         # Could get running config from /proc/config.gz but I'll just copy the newest one in /boot
         # The newest config we have
-        src = INSTALL_PATH / self.current_kernels[0].config
+        src = self.install_path / self.current_kernels[0].config
         dest = Path(os.getcwd() + "/.config")
 
         script_info(f"Copying {src.absolute()} to {dest.absolute()}")
@@ -139,12 +145,12 @@ class KernelUpdater:
             error_and_exit(err)
 
         script_info(
-            f"Installing kernel image, system map, and config to {str(INSTALL_PATH)}")
+            f"Installing kernel image, system map, and config to {str(self.install_path)}")
         try:
             # This copies over the system environment but appends the INSTALL_PATH variable
             # needed during "make install"
             subprocess.run(["/bin/bash", "-c", "\"make\" install"],
-                           env=dict(os.environ, INSTALL_PATH=str(INSTALL_PATH)), check=True)
+                           env=dict(os.environ, INSTALL_PATH=str(self.install_path)), check=True)
         except CalledProcessError as err:
             error_and_exit(err)
 
@@ -165,7 +171,7 @@ class KernelUpdater:
         """
         # Reset current list
         self.current_kernels = []
-        os.chdir(str(INSTALL_PATH))
+        os.chdir(str(self.install_path))
         script_info(
             f"Searching for installed kernel files in {os.getcwd()}...")
 
@@ -263,7 +269,9 @@ class KernelUpdater:
 
     def update(self):
         """ Run all of the private methods in the proper order """
-        self.__update_config()
+        if self.manual_edit == False:
+            # Update configuration automatically
+            self.__update_config()
         self.__compile_kernel()
         self.__install_new_kernel()
         self.__recompile_extra_modules()
@@ -272,9 +280,33 @@ class KernelUpdater:
 
 def main():
     """ main """
+    parser = argparse.ArgumentParser(
+        description='Build and install the Linux kernel.')
+    parser.add_argument(
+        '-m', '--manual-edit', dest='manual_edit', action='store_true',
+        help="Let the user copy over and edit the kernel configuration before building. \
+              By default, configuration will be copied over automatically.")
+    parser.add_argument(
+        '-p', '--install-path', dest='install_path',
+        help="Path to install kernel images, map, and config. Default is /boot/EFI/Gentoo")
+    parser.set_defaults(manual_edit=False,
+                        install_path=Path("/boot/EFI/Gentoo"))
+    args = parser.parse_args()
+
     init()  # Init colorama, not necessarily needed for Linux but why not
     script_info("-----------------------")
-    updater = KernelUpdater()
+
+    if args.manual == False:
+        script_info(
+            "Manual editing disabled. Kernel config will be automatically updated.")
+    else:
+        script_info(
+            "Manual editing enabled. Assuming user updated the configuration manually.")
+
+    # Give user a second to cancel script in case the editing configuration was unexpected
+    time.sleep(1.0)
+    updater = KernelUpdater(manual_edit=args.manual_edit,
+                            install_path=args.install_path)
     updater.update()
     script_info("-----------------------")
 
