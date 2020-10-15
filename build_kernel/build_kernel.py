@@ -7,13 +7,10 @@ import subprocess
 import shutil
 import argparse
 import time
+import configparser
 from subprocess import CalledProcessError
 from pathlib import Path
 from colorama import init, Fore, Style
-
-# How many kernel versions should be preserved
-MAX_VERSIONS_TO_KEEP = 3
-KERNEL_BUILD_DIR = Path("/usr/src/linux")
 
 
 def error_and_exit(error):
@@ -31,12 +28,13 @@ def script_info(info):
 class VersionInfo:
     """ Container for organizing all the kernel versions and files """
 
-    def __init__(self, version_triple: str, vmlinuz: Path, system_map: Path, config: Path, is_old: bool):
+    def __init__(self, version_triple: str, vmlinuz: Path, system_map: Path, config: Path, is_old: bool, kernel_modules_path: Path):
         self.version_triple = version_triple
         self.vmlinuz = vmlinuz
         self.system_map = system_map
         self.config = config
         self.is_old = is_old
+        self.__kernel_modules_path = kernel_modules_path
 
     def __repr__(self):
         return "VersionInfo()"
@@ -65,6 +63,37 @@ class VersionInfo:
             old_adj = 0
         return (int(major), int(minor), int(patch), int(old_adj))
 
+    def remove(self):
+        if self.is_old:
+            script_info(
+                f"Deleting version {self.version_triple}.old")
+        else:
+            script_info(
+                f"Deleting version {self.version_triple}")
+
+        # Evidently "unlink" is the same as remove
+        script_info(
+            f"Deleting file {str(self.vmlinuz.absolute())}")
+        self.vmlinuz.unlink()
+        script_info(
+            f"Deleting file {str(self.system_map.absolute())}")
+        self.system_map.unlink()
+        script_info(
+            f"Deleting file {str(self.config.absolute())}")
+        self.config.unlink()
+
+        source_dir = Path(
+            f"/usr/src/linux-{self.version_triple}-gentoo")
+        script_info(f"Deleting source directory {str(source_dir)}")
+        shutil.rmtree(source_dir)
+
+        if not self.is_old:
+            # Assume that there's a non .old kernel that's using the modules
+            modules_dir = Path(
+                f"{self.__kernel_modules_path}/{self.version_triple}-gentoo")
+            script_info(f"Deleting kernel modules in {str(modules_dir)}")
+            shutil.rmtree(modules_dir)
+
     def __eq__(self, other):
         return self.as_tuple() == other.as_tuple()
 
@@ -90,9 +119,12 @@ class KernelUpdater:
     Run using the update() method
     """
 
-    def __init__(self, manual_edit: bool, install_path: Path):
+    def __init__(self, manual_edit: bool, install_path: Path, kernel_source_path: Path, kernel_modules_path: Path, versions_to_keep: int):
         self.__manual_edit = manual_edit
         self.__install_path = install_path
+        self.__kernel_source_path = kernel_source_path
+        self.__kernel_modules_path = kernel_modules_path
+        self.__versions_to_keep = versions_to_keep
         self.__current_kernels: [VersionInfo] = []
         self.__check_perm()
         self.__find_installed_kernels()
@@ -106,7 +138,7 @@ class KernelUpdater:
 
     def __update_config(self):
         """ syncing configuration to new kernel """
-        os.chdir(str(KERNEL_BUILD_DIR))
+        os.chdir(str(self.__kernel_source_path))
 
         # Could get running config from /proc/config.gz but I'll just copy the newest one in /boot
         # The newest config we have
@@ -124,7 +156,7 @@ class KernelUpdater:
 
     def __compile_kernel(self):
         """ compile just the kernel """
-        os.chdir(str(KERNEL_BUILD_DIR))
+        os.chdir(str(self.__kernel_source_path))
         script_info(f"Compiling kernel in {os.getcwd()}")
         try:
             subprocess.run(
@@ -134,7 +166,7 @@ class KernelUpdater:
 
     def __install_new_kernel(self):
         """ install modules and kernel image itself """
-        os.chdir(str(KERNEL_BUILD_DIR))
+        os.chdir(str(self.__kernel_source_path))
 
         script_info("Installing modules")
         try:
@@ -154,7 +186,7 @@ class KernelUpdater:
 
     def __recompile_extra_modules(self):
         """ recompile out-of-tree modules included by portage (nvidia-drivers) """
-        os.chdir(str(KERNEL_BUILD_DIR))
+        os.chdir(str(self.__kernel_source_path))
         script_info("Recompiling modules from portage")
         try:
             subprocess.run(["emerge", "@module-rebuild"], check=True)
@@ -214,7 +246,7 @@ class KernelUpdater:
                     s) and not str(s).endswith(".old")].pop()
 
             self.__current_kernels.append(VersionInfo(
-                version_triple, vmlinuz, system_map, config, is_old))
+                version_triple, vmlinuz, system_map, config, is_old, self.__kernel_modules_path))
 
         self.__current_kernels = sorted(self.__current_kernels, reverse=True)
 
@@ -224,7 +256,7 @@ class KernelUpdater:
         self.__find_installed_kernels()
 
         # If there's MAX_VERSIONS_TO_KEEP or less versions, exit
-        if len(self.__current_kernels) <= MAX_VERSIONS_TO_KEEP:
+        if len(self.__current_kernels) <= self.__versions_to_keep:
             script_info(
                 f"Only {len(self.__current_kernels)} kernels are there, not deleting any")
             return
@@ -241,29 +273,7 @@ class KernelUpdater:
         num_to_delete = len(self.__current_kernels) - 2
         script_info(f"Deleting {num_to_delete} old kernel versions...")
         for _ in range(num_to_delete):
-            kernel_to_delete = self.__current_kernels.pop()
-            if kernel_to_delete.is_old:
-                script_info(
-                    f"Deleting version {kernel_to_delete.version_triple}.old")
-            else:
-                script_info(
-                    f"Deleting version {kernel_to_delete.version_triple}")
-
-            # Evidently "unlink" is the same as remove
-            script_info(
-                f"Deleting file {str(kernel_to_delete.vmlinuz.absolute())}")
-            kernel_to_delete.vmlinuz.unlink()
-            script_info(
-                f"Deleting file {str(kernel_to_delete.system_map.absolute())}")
-            kernel_to_delete.system_map.unlink()
-            script_info(
-                f"Deleting file {str(kernel_to_delete.config.absolute())}")
-            kernel_to_delete.config.unlink()
-
-            source_dir = Path(
-                f"/usr/src/linux-{kernel_to_delete.version_triple}-gentoo")
-            script_info(f"Deleting source directory {str(source_dir)}")
-            shutil.rmtree(source_dir)
+            self.__current_kernels.pop().remove()
 
     def update(self):
         """ Run all of the private methods in the proper order """
@@ -287,11 +297,7 @@ def main():
         '-m', '--manual-edit', dest='manual_edit', action='store_true',
         help="Let the user copy over and edit the kernel configuration before building. \
               By default, configuration will be copied over automatically.")
-    parser.add_argument(
-        '-p', '--install-path', dest='install_path',
-        help="Path to install kernel images, map, and config. Default is /boot/EFI/Gentoo")
-    parser.set_defaults(manual_edit=False,
-                        install_path=Path("/boot/EFI/Gentoo"))
+    parser.set_defaults(manual_edit=False)
     args = parser.parse_args()
 
     init()  # Init colorama, not necessarily needed for Linux but why not
@@ -304,8 +310,31 @@ def main():
         script_info(
             "Manual editing enabled. Assuming user updated the configuration manually.")
 
+    config = configparser.ConfigParser()
+    config.read("build_kernel.conf")
+    # Any of these will throw if there's an issue
+    try:
+        install_path = config["paths"]["InstallPath"]
+    except ValueError:
+        error_and_exit("No InstallPath was configured!")
+    try:
+        source_path = config["paths"]["KernelSourcePath"]
+    except ValueError:
+        error_and_exit("No KernelSourcePath was configured!")
+    try:
+        modules_path = config["paths"]["KernelModulesPath"]
+    except ValueError:
+        error_and_exit("No KernelModulesPath was configured!")
+    try:
+        versions_to_keep = config["settings"]["VersionsToKeep"]
+    except ValueError:
+        error_and_exit("No VersionsToKeep was configured!")
+
     updater = KernelUpdater(manual_edit=args.manual_edit,
-                            install_path=args.install_path)
+                            install_path=install_path,
+                            kernel_source_path=source_path,
+                            kernel_modules_path=modules_path,
+                            versions_to_keep=versions_to_keep)
     updater.update()
     script_info("-----------------------")
 
