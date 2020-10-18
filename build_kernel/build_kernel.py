@@ -119,12 +119,13 @@ class KernelUpdater:
     Run using the update() method
     """
 
-    def __init__(self, manual_edit: bool, install_path: Path, kernel_source_path: Path, kernel_modules_path: Path, versions_to_keep: int):
+    def __init__(self, manual_edit: bool, install_path: Path, kernel_source_path: Path, kernel_modules_path: Path, versions_to_keep: int, clean_only: bool):
         self.__manual_edit = manual_edit
         self.__install_path = install_path
         self.__kernel_source_path = kernel_source_path
         self.__kernel_modules_path = kernel_modules_path
         self.__versions_to_keep = versions_to_keep
+        self.__clean_only = clean_only
         self.__current_kernels: [VersionInfo] = []
         self.__check_perm()
         self.__find_installed_kernels()
@@ -228,9 +229,7 @@ class KernelUpdater:
             system_maps = Path().glob("System.map*")
             configs = Path().glob("config*")
             if is_old:
-                # Iterate through all of the system_maps and configs and check each
-                # stringified filename to see if it has our version_triple and if
-                # the filename ends with .old
+                # Iterate thr__clean_upe ends with .old
                 # Note: .pop() is a lazy way to convert a single-element list to the underlying type
                 #
                 # Be extra sure that the suffix is .old
@@ -256,7 +255,7 @@ class KernelUpdater:
         self.__find_installed_kernels()
 
         # If there's MAX_VERSIONS_TO_KEEP or less versions, exit
-        if len(self.__current_kernels) <= self.__versions_to_keep:
+        if len(self.__current_kernels) <= len(self.__versions_to_keep):
             script_info(
                 f"Only {len(self.__current_kernels)} kernels are there, not deleting any")
             return
@@ -277,12 +276,18 @@ class KernelUpdater:
 
     def update(self):
         """ Run all of the private methods in the proper order """
-        if self.__manual_edit == False:
-            # Update configuration automatically
-            self.__update_config()
+        if self.__clean_only:
+            script_info("Cleaning and then returning...")
+            self.__clean_up()
+            return
+
+        if self.__manual_edit:
+            script_info("Using user-updated configuration")
         else:
             # Do nothing, assume that the user updated the config
-            script_info("Using user-updated configuration")
+            script_info("Updating configuration automatically")
+            self.__update_config()
+
         self.__compile_kernel()
         self.__install_new_kernel()
         self.__recompile_extra_modules()
@@ -297,7 +302,10 @@ def main():
         '-m', '--manual-edit', dest='manual_edit', action='store_true',
         help="Let the user copy over and edit the kernel configuration before building. \
               By default, configuration will be copied over automatically.")
-    parser.set_defaults(manual_edit=False)
+    parser.add_argument(
+        '-c', '--clean-only', dest='clean_only', action='store_false',
+        help="Clean up the install, source, and module directories then exit")
+    parser.set_defaults(manual_edit=False, clean_only=False)
     args = parser.parse_args()
 
     init()  # Init colorama, not necessarily needed for Linux but why not
@@ -311,20 +319,36 @@ def main():
             "Manual editing enabled. Assuming user updated the configuration manually.")
 
     config = configparser.ConfigParser()
-    config.read("build_kernel.conf")
+    possible_conf_files = [
+        Path("build_kernel.conf"),
+        Path.home() / Path("Development/scripts/build_kernel/build_kernel.conf"),
+        Path.home() / Path(".config/build_kernel.conf")
+    ]
+
+    try:
+        config_file = next(x for x in possible_conf_files if x.exists())
+    except ValueError:
+        error_and_exit(
+            f"could not find build_kernel.conf in {''.join(map(str, possible_conf_files))}")
+
+    script_info(f"Using conf file {str(config_file)}")
+    config.read(str(config_file))
     # Any of these will throw if there's an issue
     try:
         install_path = config["paths"]["InstallPath"]
     except ValueError:
         error_and_exit("No InstallPath was configured!")
+
     try:
         source_path = config["paths"]["KernelSourcePath"]
     except ValueError:
         error_and_exit("No KernelSourcePath was configured!")
+
     try:
         modules_path = config["paths"]["KernelModulesPath"]
     except ValueError:
         error_and_exit("No KernelModulesPath was configured!")
+
     try:
         versions_to_keep = config["settings"]["VersionsToKeep"]
     except ValueError:
@@ -334,7 +358,8 @@ def main():
                             install_path=install_path,
                             kernel_source_path=source_path,
                             kernel_modules_path=modules_path,
-                            versions_to_keep=versions_to_keep)
+                            versions_to_keep=versions_to_keep,
+                            clean_only=args.clean_only)
     updater.update()
     script_info("-----------------------")
 
