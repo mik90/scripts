@@ -119,13 +119,15 @@ class KernelUpdater:
     Run using the update() method
     """
 
-    def __init__(self, manual_edit: bool, install_path: Path, kernel_source_path: Path, kernel_modules_path: Path, versions_to_keep: int, clean_only: bool):
+    def __init__(self, manual_edit: bool, install_path: Path, kernel_source_path: Path, kernel_modules_path: Path,
+                 versions_to_keep: int, clean_only: bool, gen_grub_config: bool):
         self.__manual_edit = manual_edit
         self.__install_path = install_path
         self.__kernel_source_path = kernel_source_path
         self.__kernel_modules_path = kernel_modules_path
         self.__versions_to_keep = versions_to_keep
         self.__clean_only = clean_only
+        self.__gen_grub_config = gen_grub_config
         self.__current_kernels: [VersionInfo] = []
         self.__check_perm()
         self.__find_installed_kernels()
@@ -249,6 +251,17 @@ class KernelUpdater:
 
         self.__current_kernels = sorted(self.__current_kernels, reverse=True)
 
+    def __grub_mk_config(self):
+        """ Generate grub config """
+        grub_cfg_location = f"{self.__install_path}/grub/grub.cfg"
+        script_info(f"Regenerating grub configuration at {grub_cfg_location}")
+
+        try:
+            subprocess.run(
+                ["grub-mkconfig", "-o", grub_cfg_location], check=True)
+        except CalledProcessError as err:
+            error_and_exit(err)
+
     def __clean_up(self):
         """ delete old kernels """
 
@@ -292,6 +305,17 @@ class KernelUpdater:
         self.__install_new_kernel()
         self.__recompile_extra_modules()
         self.__clean_up()
+        if self.__gen_grub_config:
+            self.__grub_mk_config()
+
+
+def str_to_bool(string: str):
+    if string.lower() in ["true", "t", "1", "on", "yes"]:
+        return True
+    elif string.lower() in ["false", "f", "0", "off", "no"]:
+        return False
+    else:
+        raise TypeError(f"Could not parse {string} as boolean")
 
 
 def main():
@@ -354,12 +378,19 @@ def main():
     except ValueError:
         error_and_exit("No VersionsToKeep was configured!")
 
+    try:
+        gen_grub_config = str_to_bool(
+            config["settings"]["RegenerateGrubConfig"])
+    except ValueError:
+        error_and_exit(" RegenerateGrubConfig was not configured!")
+
     updater = KernelUpdater(manual_edit=args.manual_edit,
                             install_path=install_path,
                             kernel_source_path=source_path,
                             kernel_modules_path=modules_path,
                             versions_to_keep=versions_to_keep,
-                            clean_only=args.clean_only)
+                            clean_only=args.clean_only,
+                            gen_grub_config=gen_grub_config)
     updater.update()
     script_info("-----------------------")
 
