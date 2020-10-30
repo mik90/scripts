@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Exec=xbacklight -set 45
+Exec=/home/mike/Development/scripts/set_t440p_backlight.sh 2800
 Hidden=false
-X-GNOME-Autostart-enabled=true
 Name=Default backlight
-Comment=Sets default backlight to 45%
+Comment=Sets backlight to reasonable level
+X-GNOME-Autostart-enabled=true

@@ -10,5 +10,5 @@ Various utility scripts
 
 ### backlight.desktop
 - Sets the backlight (brightness) for on login
-- For Gnome, use a hardlink and put this in ~/.config/autostart
+- For Gnome, use a hardlink and put this in /etc/xdg/autostart
 
