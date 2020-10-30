@@ -345,7 +345,6 @@ def main():
     config = configparser.ConfigParser()
     possible_conf_files = [
         Path("build_kernel.conf"),
-        Path.home() / Path("Development/scripts/build_kernel/build_kernel.conf"),
         Path.home() / Path(".config/build_kernel.conf")
     ]
 
