@@ -351,7 +351,7 @@ def main():
 
     try:
         config_file = next(x for x in possible_conf_files if x.exists())
-    except ValueError:
+    except StopIteration:
         error_and_exit(
             f"could not find build_kernel.conf in {''.join(map(str, possible_conf_files))}")
 
