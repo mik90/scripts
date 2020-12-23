@@ -28,7 +28,9 @@ def script_info(info):
 class VersionInfo:
     """ Container for organizing all the kernel versions and files """
 
-    def __init__(self, version_triple: str, vmlinuz: Path, system_map: Path, config: Path, is_old: bool, kernel_modules_path: Path = "/lib/modules", release_candidate_num: int = 0):
+    def __init__(self, version_triple: str, vmlinuz: Path, system_map: Path, config: Path, is_old: bool,
+                 release_candidate_num: int = 0,
+                 kernel_modules_path: Path = "/lib/modules", kernel_source_path: Path = "/usr/src/linux"):
         self.version_triple = version_triple
         self.vmlinuz = vmlinuz
         self.system_map = system_map
@@ -38,6 +40,7 @@ class VersionInfo:
         # Expect it to be r[digit > 0]
         self.release_candidate_num = release_candidate_num
         self.__kernel_modules_path = kernel_modules_path
+        self.__kernel_source_path = kernel_source_path
 
     def __repr__(self):
         return "VersionInfo()"
@@ -80,28 +83,28 @@ class VersionInfo:
             script_info(
                 f"Deleting version {self.version_triple}")
 
-        # Evidently "unlink" is the same as remove
-        script_info(
-            f"Deleting file {str(self.vmlinuz.absolute())}")
-        self.vmlinuz.unlink()
-        script_info(
-            f"Deleting file {str(self.system_map.absolute())}")
-        self.system_map.unlink()
-        script_info(
-            f"Deleting file {str(self.config.absolute())}")
-        self.config.unlink()
+        for f in [self.vmlinuz.absolute(), self.system_map.absolute(), self.config.absolute()]:
+            script_info(
+                f"Deleting file {str(f)}")
+            subprocess.run(
+                ["trash-put", f"{str(f)}"], check=True)
 
-        source_dir = Path(
-            f"/usr/src/linux-{self.version_triple}-gentoo")
+        source_dir = str(
+            f"{str(self.__kernel_source_path)}-{self.version_triple}-gentoo")
+        if self.release_candidate_num > 0:
+            source_dir += f"-r{self.release_candidate_num}"
+
         script_info(f"Deleting source directory {str(source_dir)}")
-        shutil.rmtree(source_dir)
+        subprocess.run(
+            ["trash-put", f"{str(source_dir)}"], check=True)
 
         if not self.is_old:
             # Assume that there's a non .old kernel that's using the modules
             modules_dir = Path(
                 f"{self.__kernel_modules_path}/{self.version_triple}-gentoo")
             script_info(f"Deleting kernel modules in {str(modules_dir)}")
-            shutil.rmtree(modules_dir)
+            subprocess.run(
+                ["trash-put", f"{str(modules_dir)}"], check=True)
 
     def __eq__(self, other):
         return self.as_tuple() == other.as_tuple()
