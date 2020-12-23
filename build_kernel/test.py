@@ -21,7 +21,6 @@ class TestBuildKernel(unittest.TestCase):
                                        system_map="System.map-5.6.10-gentoo", config="config-5.6.10-gentoo", is_old=False)
         new = build_kernel.VersionInfo(version_triple="5.7.10", vmlinuz="vmlinuz-5.7.10-gentoo",
                                        system_map="System.map-5.7.10-gentoo", config="config-5.7.10-gentoo", is_old=False)
-        # Greater is newer
         self.assertGreater(new, old)
 
     def test_version_compare_patch(self):
@@ -29,7 +28,6 @@ class TestBuildKernel(unittest.TestCase):
                                        system_map="System.map-5.7.9-gentoo", config="config-5.7.9-gentoo", is_old=False)
         new = build_kernel.VersionInfo(version_triple="5.7.10", vmlinuz="vmlinuz-5.7.10-gentoo",
                                        system_map="System.map-5.7.10-gentoo", config="config-5.7.10-gentoo", is_old=False)
-        # Greater is newer
         self.assertGreater(new, old)
 
     def test_version_compare_old(self):
@@ -37,7 +35,22 @@ class TestBuildKernel(unittest.TestCase):
                                        system_map="System.map-5.7.10-gentoo.old", config="config-5.7.10-gentoo.old", is_old=True)
         new = build_kernel.VersionInfo(version_triple="5.7.10", vmlinuz="vmlinuz-5.7.10-gentoo",
                                        system_map="System.map-5.7.10-gentoo", config="config-5.7.10-gentoo", is_old=False)
-        # Greater is newer
+        self.assertGreater(new, old)
+
+    def test_version_compare_rc(self):
+        # rc 1 vs rc 0
+        old = build_kernel.VersionInfo(version_triple="5.7.10", vmlinuz="vmlinuz-5.7.10-gentoo.old",
+                                       system_map="System.map-5.7.10-gentoo.old", config="config-5.7.10-gentoo.old", release_candidate_num=0, is_old=False)
+        new = build_kernel.VersionInfo(version_triple="5.7.10", vmlinuz="vmlinuz-5.7.10-gentoo",
+                                       system_map="System.map-5.7.10-gentoo", config="config-5.7.10-gentoo", release_candidate_num=1, is_old=False)
+        self.assertGreater(new, old)
+
+    def test_version_compare_rc_2(self):
+        # rc 15 vs rc 3
+        old = build_kernel.VersionInfo(version_triple="5.7.10", vmlinuz="vmlinuz-5.7.10-gentoo.old",
+                                       system_map="System.map-5.7.10-gentoo.old", config="config-5.7.10-gentoo.old", release_candidate_num=3, is_old=False)
+        new = build_kernel.VersionInfo(version_triple="5.7.10", vmlinuz="vmlinuz-5.7.10-gentoo",
+                                       system_map="System.map-5.7.10-gentoo", config="config-5.7.10-gentoo", release_candidate_num=15, is_old=False)
         self.assertGreater(new, old)
 
 

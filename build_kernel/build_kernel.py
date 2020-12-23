@@ -28,22 +28,30 @@ def script_info(info):
 class VersionInfo:
     """ Container for organizing all the kernel versions and files """
 
-    def __init__(self, version_triple: str, vmlinuz: Path, system_map: Path, config: Path, is_old: bool, kernel_modules_path: Path):
+    def __init__(self, version_triple: str, vmlinuz: Path, system_map: Path, config: Path, is_old: bool, kernel_modules_path: Path = "/lib/modules", release_candidate_num: int = 0):
         self.version_triple = version_triple
         self.vmlinuz = vmlinuz
         self.system_map = system_map
         self.config = config
         self.is_old = is_old
+        # 0 if not an explicit release candidate
+        # Expect it to be r[digit > 0]
+        self.release_candidate_num = release_candidate_num
         self.__kernel_modules_path = kernel_modules_path
 
     def __repr__(self):
         return "VersionInfo()"
 
     def __str__(self):
+        out = f"VersionInfo({self.version_triple}"
+
+        if int(self.release_candidate_num) > 0:
+            out += f"-r{self.release_candidate_num}"
         if self.is_old:
-            return f"VersionInfo({self.version_triple}.old, {self.vmlinuz}, {self.system_map}, {self.config})"
-        else:
-            return f"VersionInfo({self.version_triple}, {self.vmlinuz}, {self.system_map}, {self.config})"
+            out += ".old"
+
+        out += f", {self.vmlinuz}, {self.system_map}, {self.config})"
+        return out
 
     def as_tuple(self):
         """ Convert VersionInfo into a tuple """
@@ -61,7 +69,8 @@ class VersionInfo:
         else:
             # is NOT .old, give it an advantage in sorting by making this 0
             old_adj = 0
-        return (int(major), int(minor), int(patch), int(old_adj))
+
+        return (int(major), int(minor), int(patch), int(self.release_candidate_num), int(old_adj))
 
     def remove(self):
         if self.is_old:
@@ -213,18 +222,31 @@ class KernelUpdater:
         system_maps = list(Path().glob("System.map*"))
         configs = list(Path().glob("config*"))
 
+        """
+        # Eh, this won't work if im trying to fix a broken setup where there's a mismatch
         # Ensure that the 3 lists are the same length
         if not len(list(vmlinuzes)) == len(list(system_maps)) and len(list(system_maps)) == len(list(configs)):
             error_and_exit(f"There are {len(list(vmlinuzes))} vmlinuz files, {len(list(system_maps))} "
                            + f"system maps, and {len(list(configs))} config files")
+        """
 
         for vmlinuz in vmlinuzes:
             version_triple = str(vmlinuz).split(
                 sep="-")  # Split up the vmlinuz string
-            if len(version_triple) != 3:
+
+            # len of 3 is normal, len of 4 is release candidate
+            if len(version_triple) not in [3, 4]:
                 error_and_exit(
-                    f"Expected len(version) == 3, got {len(version_triple)}!")
-            version_triple = version_triple[1]  # extract the X.Y.Z
+                    f"Expected len(version) == 3 or 4, got {len(version_triple)} for version_triple {version_triple}!")
+
+            if len(version_triple) == 4:
+                # Example, grab '2' from '-r2'
+                release_candidate_num = str(version_triple[3]).lstrip('r')
+            else:
+                release_candidate_num = 0
+
+            # extract the '5.9.2' from 'vmlinuz-5.9.2-gentoo'
+            version_triple = version_triple[1]
 
             is_old = bool(vmlinuz.suffix == '.old')
             # Find the accompying System.map and config
@@ -247,7 +269,8 @@ class KernelUpdater:
                     s) and not str(s).endswith(".old")].pop()
 
             self.__current_kernels.append(VersionInfo(
-                version_triple, vmlinuz, system_map, config, is_old, self.__kernel_modules_path))
+                version_triple=version_triple, vmlinuz=vmlinuz, system_map=system_map, config=config, is_old=is_old,
+                kernel_modules_path=self.__kernel_modules_path, release_candidate_num=release_candidate_num))
 
         self.__current_kernels = sorted(self.__current_kernels, reverse=True)
 
@@ -276,10 +299,7 @@ class KernelUpdater:
         # Otherwise delete everything but the 2 newest versions
         # Sort them by age
         # The lowest values (newest) should be first, and highest (oldest) at the end
-        self.__current_kernels = sorted(self.__current_kernels, reverse=True)
-        script_info(f"sorted version_infos (newest to oldest):")
-        for v in self.__current_kernels:
-            script_info(f"    {v}")
+        self.print_installed_kernels()
 
         # Also delete the accompying System map and configs
         num_to_delete = len(self.__current_kernels) - 2
@@ -308,6 +328,13 @@ class KernelUpdater:
         if self.__gen_grub_config:
             self.__grub_mk_config()
 
+    def print_installed_kernels(self):
+        """ Print all of the available kernels  """
+        self.__current_kernels = sorted(self.__current_kernels, reverse=True)
+        script_info(f"sorted version_infos (newest to oldest):")
+        for v in self.__current_kernels:
+            script_info(f"    {v}")
+
 
 def str_to_bool(string: str):
     if string.lower() in ["true", "t", "1", "on", "yes"]:
@@ -318,7 +345,7 @@ def str_to_bool(string: str):
         raise TypeError(f"Could not parse {string} as boolean")
 
 
-def main():
+if __name__ == '__main__':
     """ main """
     parser = argparse.ArgumentParser(
         description='Build and install the Linux kernel.')
@@ -329,7 +356,10 @@ def main():
     parser.add_argument(
         '-c', '--clean-only', dest='clean_only', action='store_false',
         help="Clean up the install, source, and module directories then exit")
-    parser.set_defaults(manual_edit=False, clean_only=False)
+    parser.add_argument(
+        '-l', '--list', dest='list', action='store_true',
+        help="List installed kernels and then exit")
+    parser.set_defaults(manual_edit=False, clean_only=False, list=False)
     args = parser.parse_args()
 
     init()  # Init colorama, not necessarily needed for Linux but why not
@@ -390,9 +420,11 @@ def main():
                             versions_to_keep=versions_to_keep,
                             clean_only=args.clean_only,
                             gen_grub_config=gen_grub_config)
+    if args.list == True:
+        script_info(
+            "Listing installed kernels and then exiting...")
+        updater.print_installed_kernels()
+        exit(0)
+
     updater.update()
     script_info("-----------------------")
-
-
-if __name__ == '__main__':
-    main()
