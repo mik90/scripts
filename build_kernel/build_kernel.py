@@ -91,7 +91,7 @@ class VersionInfo:
 
         source_dir = str(
             f"{str(self.__kernel_source_path)}-{self.version_triple}-gentoo")
-        if self.release_candidate_num > 0:
+        if int(self.release_candidate_num) > 0:
             source_dir += f"-r{self.release_candidate_num}"
 
         script_info(f"Deleting source directory {str(source_dir)}")
