@@ -75,10 +75,12 @@ class VersionInfo:
 
         return (int(major), int(minor), int(patch), int(self.release_candidate_num), int(old_adj))
 
-    def remove(self):
+    def remove(self, trash_path: Path):
 
         def get_trash_cmd(file):
-            return ["trash-put", f"{str(file)}", f"--trash-dir=/home/mike/.local/share/Trash"]
+            # TODO Get trash-cli working across partitions
+            # return ["trash-put", f"{str(file)}", f"--trash-dir={trash_path}"]
+            return ["rm", "-r", f"{str(file)}"]
 
         if self.is_old:
             script_info(
@@ -133,11 +135,12 @@ class KernelUpdater:
     """
 
     def __init__(self, manual_edit: bool, install_path: Path, kernel_source_path: Path, kernel_modules_path: Path,
-                 versions_to_keep: int, clean_only: bool, gen_grub_config: bool):
+                 versions_to_keep: int, clean_only: bool, gen_grub_config: bool, trash_path: Path):
         self.__manual_edit = manual_edit
         self.__install_path = install_path
         self.__kernel_source_path = kernel_source_path
         self.__kernel_modules_path = kernel_modules_path
+        self.__trash_path = trash_path
         self.__versions_to_keep = versions_to_keep
         self.__clean_only = clean_only
         self.__gen_grub_config = gen_grub_config
@@ -257,20 +260,37 @@ class KernelUpdater:
             system_maps = Path().glob("System.map*")
             configs = Path().glob("config*")
             if is_old:
-                # Iterate thr__clean_upe ends with .old
                 # Note: .pop() is a lazy way to convert a single-element list to the underlying type
                 #
                 # Be extra sure that the suffix is .old
-                system_map = [s for s in system_maps if version_triple in str(
-                    s) and str(s).endswith(".old")].pop()
-                config = [s for s in configs if version_triple in str(
-                    s) and str(s).endswith(".old")].pop()
+                try:
+                    system_map = [s for s in system_maps if version_triple in str(
+                        s) and str(s).endswith(".old")].pop()
+                except:
+                    error_and_exit(
+                        f"Could not find a system_map for {version_triple}.old!")
+
+                try:
+                    config = [s for s in configs if version_triple in str(
+                        s) and str(s).endswith(".old")].pop()
+                except:
+                    error_and_exit(
+                        f"Could not find a config for {version_triple}.old!")
             else:
                 # Ensure that the suffix isn't .old
-                system_map = [s for s in system_maps if version_triple in str(
-                    s) and not str(s).endswith(".old")].pop()
-                config = [s for s in configs if version_triple in str(
-                    s) and not str(s).endswith(".old")].pop()
+                try:
+                    system_map = [s for s in system_maps if version_triple in str(
+                        s) and not str(s).endswith(".old")].pop()
+                except:
+                    error_and_exit(
+                        f"Could not find a system_map for {version_triple}!")
+
+                try:
+                    config = [s for s in configs if version_triple in str(
+                        s) and not str(s).endswith(".old")].pop()
+                except:
+                    error_and_exit(
+                        f"Could not find a config for {version_triple}!")
 
             self.__current_kernels.append(VersionInfo(
                 version_triple=version_triple, vmlinuz=vmlinuz, system_map=system_map, config=config, is_old=is_old,
@@ -289,7 +309,7 @@ class KernelUpdater:
         except CalledProcessError as err:
             error_and_exit(err)
 
-    def __clean_up(self):
+    def __clean_up(self, trash_path: Path):
         """ delete old kernels """
 
         self.__find_installed_kernels()
@@ -309,13 +329,13 @@ class KernelUpdater:
         num_to_delete = len(self.__current_kernels) - 2
         script_info(f"Deleting {num_to_delete} old kernel versions...")
         for _ in range(num_to_delete):
-            self.__current_kernels.pop().remove()
+            self.__current_kernels.pop().remove(trash_path=trash_path)
 
     def update(self):
         """ Run all of the private methods in the proper order """
         if self.__clean_only:
             script_info("Cleaning and then returning...")
-            self.__clean_up()
+            self.__clean_up(self.__trash_path)
             return
 
         if self.__manual_edit:
@@ -328,7 +348,7 @@ class KernelUpdater:
         self.__compile_kernel()
         self.__install_new_kernel()
         self.__recompile_extra_modules()
-        self.__clean_up()
+        self.__clean_up(self.__trash_path)
         if self.__gen_grub_config:
             self.__grub_mk_config()
 
@@ -358,7 +378,7 @@ if __name__ == '__main__':
         help="Let the user copy over and edit the kernel configuration before building. \
               By default, configuration will be copied over automatically.")
     parser.add_argument(
-        '-c', '--clean-only', dest='clean_only', action='store_false',
+        '-c', '--clean-only', dest='clean_only', action='store_true',
         help="Clean up the install, source, and module directories then exit")
     parser.add_argument(
         '-l', '--list', dest='list', action='store_true',
@@ -368,6 +388,10 @@ if __name__ == '__main__':
 
     init()  # Init colorama, not necessarily needed for Linux but why not
     script_info("-----------------------")
+
+    if args.clean_only == True:
+        script_info(
+            "Clean-only enabled")
 
     if args.manual_edit == False:
         script_info(
@@ -405,6 +429,10 @@ if __name__ == '__main__':
         modules_path = config["paths"]["KernelModulesPath"]
     except ValueError:
         error_and_exit("No KernelModulesPath was configured!")
+    try:
+        trash_path = config["paths"]["TrashPath"]
+    except ValueError:
+        error_and_exit("No TrashPath was configured!")
 
     try:
         versions_to_keep = config["settings"]["VersionsToKeep"]
@@ -423,7 +451,8 @@ if __name__ == '__main__':
                             kernel_modules_path=modules_path,
                             versions_to_keep=versions_to_keep,
                             clean_only=args.clean_only,
-                            gen_grub_config=gen_grub_config)
+                            gen_grub_config=gen_grub_config,
+                            trash_path=trash_path)
     if args.list == True:
         script_info(
             "Listing installed kernels and then exiting...")
