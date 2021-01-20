@@ -76,6 +76,10 @@ class VersionInfo:
         return (int(major), int(minor), int(patch), int(self.release_candidate_num), int(old_adj))
 
     def remove(self):
+
+        def get_trash_cmd(file):
+            return ["trash-put", f"{str(file)}", f"--trash-dir=/home/mike/.local/share/Trash"]
+
         if self.is_old:
             script_info(
                 f"Deleting version {self.version_triple}.old")
@@ -86,8 +90,7 @@ class VersionInfo:
         for f in [self.vmlinuz.absolute(), self.system_map.absolute(), self.config.absolute()]:
             script_info(
                 f"Deleting file {str(f)}")
-            subprocess.run(
-                ["trash-put", f"{str(f)}"], check=True)
+            subprocess.run(get_trash_cmd(f), check=True)
 
         source_dir = str(
             f"{str(self.__kernel_source_path)}-{self.version_triple}-gentoo")
@@ -95,16 +98,14 @@ class VersionInfo:
             source_dir += f"-r{self.release_candidate_num}"
 
         script_info(f"Deleting source directory {str(source_dir)}")
-        subprocess.run(
-            ["trash-put", f"{str(source_dir)}"], check=True)
+        subprocess.run(get_trash_cmd(source_dir), check=True)
 
         if not self.is_old:
             # Assume that there's a non .old kernel that's using the modules
             modules_dir = Path(
                 f"{self.__kernel_modules_path}/{self.version_triple}-gentoo")
             script_info(f"Deleting kernel modules in {str(modules_dir)}")
-            subprocess.run(
-                ["trash-put", f"{str(modules_dir)}"], check=True)
+            subprocess.run(get_trash_cmd(modules_dir), check=True)
 
     def __eq__(self, other):
         return self.as_tuple() == other.as_tuple()
