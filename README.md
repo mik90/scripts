@@ -10,6 +10,7 @@ Various utility scripts
 - Requires python's colorama package for color-coded output
 - Hard-codes the job count and load averages for building based on my CPU (12 core)
 - **TODO** Figure out why trash-cli doesn't work across partitions (`/boot -> /`)
+  - just using `rm` for now
 
 ### backlight.desktop
 - Sets the backlight (brightness) for on login
