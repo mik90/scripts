@@ -6,23 +6,31 @@ import sys
 import subprocess
 import shutil
 import argparse
-import time
 import configparser
 from subprocess import CalledProcessError
 from pathlib import Path
-from colorama import init, Fore, Style
+from typing import List
+HAS_COLORAMA = 'colorama' in sys.modules
+if HAS_COLORAMA:
+    from colorama import init, Fore, Style
 
 
 def error_and_exit(error):
     """ print error then exit with return code 1 """
-    print(Fore.RED + f"{sys.argv[0]}: " +
-          Style.RESET_ALL + f"Error! {error}, exiting...")
+    if HAS_COLORAMA:
+        print(Fore.RED + f"{sys.argv[0]}: " +
+              Style.RESET_ALL + f"Error! {error}, exiting...")
+    else:
+        print(f"Error! {error}, exiting...")
     sys.exit(1)
 
 
 def script_info(info):
     """ print debugging info """
-    print(Fore.GREEN + f"{sys.argv[0]}: " + Style.RESET_ALL + f"{info}")
+    if HAS_COLORAMA:
+        print(Fore.GREEN + f"{sys.argv[0]}: " + Style.RESET_ALL + f"{info}")
+    else:
+        print(f"{info}")
 
 
 class VersionInfo:
@@ -144,7 +152,7 @@ class KernelUpdater:
         self.__versions_to_keep = versions_to_keep
         self.__clean_only = clean_only
         self.__gen_grub_config = gen_grub_config
-        self.__current_kernels: [VersionInfo] = []
+        self.__current_kernels: List[VersionInfo] = []
         self.__check_perm()
         self.__find_installed_kernels()
 
@@ -376,7 +384,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-m', '--manual-edit', dest='manual_edit', action='store_true',
         help="Let the user copy over and edit the kernel configuration before building. \
-              By default, configuration will be copied over automatically.")
+              Otherwise, configuration will be copied over automatically.")
     parser.add_argument(
         '-c', '--clean-only', dest='clean_only', action='store_true',
         help="Clean up the install, source, and module directories then exit")
@@ -386,7 +394,10 @@ if __name__ == '__main__':
     parser.set_defaults(manual_edit=False, clean_only=False, list=False)
     args = parser.parse_args()
 
-    init()  # Init colorama, not necessarily needed for Linux but why not
+    if HAS_COLORAMA:
+        init()  # Init colorama, not necessarily needed for Linux but why not
+    else:
+        print("dev-python/colorama not installed")
     script_info("-----------------------")
 
     if args.clean_only == True:
