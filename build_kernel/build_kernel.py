@@ -143,7 +143,7 @@ class KernelUpdater:
     """
 
     def __init__(self, manual_edit: bool, install_path: Path, kernel_source_path: Path, kernel_modules_path: Path,
-                 versions_to_keep: int, clean_only: bool, gen_grub_config: bool, trash_path: Path):
+                 versions_to_keep: int, clean_only: bool, gen_grub_config: bool, trash_path: Path, emerge_preserved_rebuild: bool):
         self.__manual_edit = manual_edit
         self.__install_path = install_path
         self.__kernel_source_path = kernel_source_path
@@ -152,6 +152,7 @@ class KernelUpdater:
         self.__versions_to_keep = versions_to_keep
         self.__clean_only = clean_only
         self.__gen_grub_config = gen_grub_config
+        self.__emerge_preserved_rebuild = emerge_preserved_rebuild
         self.__current_kernels: List[VersionInfo] = []
         self.__find_installed_kernels()
 
@@ -355,7 +356,8 @@ class KernelUpdater:
 
         self.__compile_kernel()
         self.__install_new_kernel()
-        self.__recompile_extra_modules()
+        if self.__emerge_preserved_rebuild:
+            self.__recompile_extra_modules()
         self.__clean_up(self.__trash_path)
         if self.__gen_grub_config:
             self.__grub_mk_config()
@@ -454,7 +456,13 @@ if __name__ == '__main__':
         gen_grub_config = str_to_bool(
             config["settings"]["RegenerateGrubConfig"])
     except ValueError:
-        error_and_exit(" RegenerateGrubConfig was not configured!")
+        error_and_exit("RegenerateGrubConfig was not configured!")
+
+    try:
+        gen_grub_config = str_to_bool(
+            config["settings"]["EmergePreservedRebuild"])
+    except ValueError:
+        error_and_exit("EmergePreservedRebuild was not configured!")
 
     updater = KernelUpdater(manual_edit=args.manual_edit,
                             install_path=install_path,
@@ -463,7 +471,8 @@ if __name__ == '__main__':
                             versions_to_keep=versions_to_keep,
                             clean_only=args.clean_only,
                             gen_grub_config=gen_grub_config,
-                            trash_path=trash_path)
+                            trash_path=trash_path,
+                            emerge_preserved_rebuild=emerge_preserved_rebuild)
     if args.list == True:
         script_info(
             "Listing installed kernels and then exiting...")
