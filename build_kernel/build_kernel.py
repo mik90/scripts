@@ -153,7 +153,6 @@ class KernelUpdater:
         self.__clean_only = clean_only
         self.__gen_grub_config = gen_grub_config
         self.__current_kernels: List[VersionInfo] = []
-        self.__check_perm()
         self.__find_installed_kernels()
 
     def __check_perm(self):
@@ -341,6 +340,7 @@ class KernelUpdater:
 
     def update(self):
         """ Run all of the private methods in the proper order """
+        self.__check_perm()
         if self.__clean_only:
             script_info("Cleaning and then returning...")
             self.__clean_up(self.__trash_path)
@@ -397,7 +397,7 @@ if __name__ == '__main__':
     if HAS_COLORAMA:
         init()  # Init colorama, not necessarily needed for Linux but why not
     else:
-        print("dev-python/colorama not installed")
+        print("Optional dependency dev-python/colorama not installed")
     script_info("-----------------------")
 
     if args.clean_only == True:
@@ -421,7 +421,7 @@ if __name__ == '__main__':
         config_file = next(x for x in possible_conf_files if x.exists())
     except StopIteration:
         error_and_exit(
-            f"could not find build_kernel.conf in {''.join(map(str, possible_conf_files))}")
+            f"could not find any build_kernel.conf in {', '.join(map(str, possible_conf_files))}")
 
     script_info(f"Using conf file {str(config_file)}")
     config.read(str(config_file))
