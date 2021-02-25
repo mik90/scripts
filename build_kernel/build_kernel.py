@@ -175,9 +175,9 @@ class KernelUpdater:
         script_info(f"Copying {src.absolute()} to {dest.absolute()}")
         shutil.copy(src, dest)
 
-        script_info(f"syncing configuration to new kernel in {os.getcwd()}")
+        script_info(f"Creating a new config using .config as a base")
         try:
-            subprocess.run(["make", "syncconfig"], check=True)
+            subprocess.run(["make", "oldconfig"], check=True)
         except CalledProcessError as err:
             error_and_exit(err)
 
