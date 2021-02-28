@@ -459,7 +459,7 @@ if __name__ == '__main__':
         error_and_exit("RegenerateGrubConfig was not configured!")
 
     try:
-        gen_grub_config = str_to_bool(
+        emerge_preserved_rebuild = str_to_bool(
             config["settings"]["EmergePreservedRebuild"])
     except ValueError:
         error_and_exit("EmergePreservedRebuild was not configured!")
